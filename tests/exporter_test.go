@@ -4,15 +4,17 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/Jagac/excelify/internal/server"
-	"github.com/Jagac/excelify/internal/services"
-	"github.com/Jagac/excelify/types"
+
 	"log"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"testing"
 
+	"github.com/Jagac/excelify/internal/server"
+	"github.com/Jagac/excelify/internal/services/converter"
+	"github.com/Jagac/excelify/internal/services/logging"
+	"github.com/Jagac/excelify/types"
 	"github.com/joho/godotenv"
 	"github.com/xuri/excelize/v2"
 )
@@ -23,12 +25,12 @@ func TestJsonHandler(t *testing.T) {
 		log.Fatalf("Error loading .env file: %v", err)
 	}
 	router := http.NewServeMux()
-	logger, err := services.NewLogger()
+	logger, err := logging.NewLogger()
 	if err != nil {
 		log.Fatalf("could not initialize logger: %v", err)
 	}
 
-	converter := services.NewConverter()
+	converter := converter.NewConverter()
 	handler := server.NewHandler(converter, logger)
 	handler.RegisterRoutes(router)
 
@@ -78,7 +80,7 @@ func TestJsonHandler(t *testing.T) {
 		rr := httptest.NewRecorder()
 		router := http.NewServeMux()
 
-		router.HandleFunc("POST /api/v1/conversions", handler.HandleJsonConversion)
+		router.HandleFunc("POST /api/v1/conversions", handler.HandleJsonToExcel)
 
 		router.ServeHTTP(rr, req)
 
@@ -154,7 +156,7 @@ func TestJsonHandler(t *testing.T) {
 		rr := httptest.NewRecorder()
 		router := http.NewServeMux()
 
-		router.HandleFunc("POST /api/v1/conversions", handler.HandleJsonConversion)
+		router.HandleFunc("POST /api/v1/conversions", handler.HandleJsonToExcel)
 
 		router.ServeHTTP(rr, req)
 
@@ -243,7 +245,6 @@ func checkExcelColumnsAndData(t *testing.T, filePath string, expectedColumns []s
 	if nameIndex == -1 {
 		t.Fatal("no 'name' column found in the headers")
 	}
-
 
 	for rowIndex, row := range rows[1:] {
 		if len(row) <= nameIndex {

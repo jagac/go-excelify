@@ -1,83 +1,16 @@
-package services
+package converter
 
 import (
-	"bytes"
 	"fmt"
+
 	"runtime"
 	"strconv"
 	"sync"
 	"time"
 
 	"github.com/Jagac/excelify/types"
-
 	"github.com/xuri/excelize/v2"
 )
-
-
-type ToExcelConverter struct{}
-
-func NewConverter() types.Converter {
-	return &ToExcelConverter{}
-}
-
-func (c *ToExcelConverter) ConvertToExcel(jsonData []map[string]interface{}, meta []types.ColumnMeta) (*bytes.Buffer, error) {
-
-	f := excelize.NewFile()
-	sheetName := "Sheet1"
-
-	if _, err := f.NewSheet(sheetName); err != nil {
-		return nil, err
-	}
-
-	if err := f.SetPanes(sheetName, &excelize.Panes{
-		Freeze:      true,
-		YSplit:      1,
-		TopLeftCell: "A2",
-		ActivePane:  "bottomLeft",
-	}); err != nil {
-		return nil, err
-	}
-
-	styles, err := createStyles(f)
-	if err != nil {
-		return nil, err
-	}
-
-	headers := createHeaders(meta)
-	if err := setHeaders(f, sheetName, headers, styles); err != nil {
-		return nil, err
-	}
-
-	if err := setData(f, sheetName, jsonData, meta, styles); err != nil {
-		return nil, err
-	}
-
-	if err := adjustColumnWidths(f, sheetName, jsonData, meta); err != nil {
-		return nil, err
-	}
-
-	lastColIndex := len(meta) - 1
-	lastColName := colIndexToName(lastColIndex)
-	rangeString := "A1:" + lastColName + "1"
-	if err := f.AutoFilter(sheetName, rangeString, []excelize.AutoFilterOptions{}); err != nil {
-		return nil, err
-	}
-
-	if err := setColumnVisibility(f, sheetName, meta, styles); err != nil {
-		return nil, err
-	}
-
-	if err := f.SetDefaultFont("Aptos Narrow"); err != nil {
-		return nil, err
-	}
-
-	var buffer bytes.Buffer
-	if err := f.Write(&buffer); err != nil {
-		return nil, err
-	}
-
-	return &buffer, nil
-}
 
 func createStyles(f *excelize.File) (*types.ExcelStyles, error) {
 	headerStyle, err := f.NewStyle(&excelize.Style{
@@ -143,19 +76,6 @@ func createHeaders(meta []types.ColumnMeta) []string {
 	}
 
 	return headers
-}
-
-func setHeaders(f *excelize.File, sheetName string, headers []string,  style *types.ExcelStyles) error {
-	for i, header := range headers {
-		cell := colIndexToName(i) + "1"
-		if err := f.SetCellStr(sheetName, cell, header); err != nil {
-			return err
-		}
-	}
-	if err := f.SetCellStyle(sheetName, "A1", colIndexToName(len(headers)-1)+"1", style.HeaderStyle); err != nil {
-		return err
-	}
-	return nil
 }
 
 func setData(f *excelize.File, sheetName string, jsonData []map[string]interface{}, meta []types.ColumnMeta, styles *types.ExcelStyles) error {
@@ -230,7 +150,6 @@ func setDataSequential(f *excelize.File, sheetName string, jsonData []map[string
 						}
 					}
 				}
-
 			case "PERCENTAGE":
 				style = styles.PercentageStyle
 			default:
@@ -252,13 +171,14 @@ func setDataSequential(f *excelize.File, sheetName string, jsonData []map[string
 
 func setDataParallel(f *excelize.File, sheetName string, jsonData []map[string]interface{}, meta []types.ColumnMeta, styles *types.ExcelStyles) error {
 	numCores := runtime.NumCPU()
-	batchSize := (len(jsonData) + numCores - 1) / numCores
-
-	var wg sync.WaitGroup
-	var mu sync.Mutex
-	var firstErr error
+	batchSize := len(jsonData) / numCores
+	if len(jsonData)%numCores != 0 {
+		batchSize++
+	}
 
 	cellDataChan := make(chan []types.CellData, numCores)
+	errChan := make(chan error, numCores)
+	var wg sync.WaitGroup
 
 	processBatch := func(batch []map[string]interface{}, startIndex int) {
 		defer wg.Done()
@@ -285,11 +205,7 @@ func setDataParallel(f *excelize.File, sheetName string, jsonData []map[string]i
 						} else {
 							value, err = strconv.Atoi(strValue)
 							if err != nil {
-								mu.Lock()
-								if firstErr == nil {
-									firstErr = fmt.Errorf("failed to convert %v to integer: %w", strValue, err)
-								}
-								mu.Unlock()
+								errChan <- fmt.Errorf("failed to convert %v to integer: %w", strValue, err)
 								return
 							}
 						}
@@ -302,16 +218,11 @@ func setDataParallel(f *excelize.File, sheetName string, jsonData []map[string]i
 						} else {
 							value, err = strconv.ParseFloat(strValue, 64)
 							if err != nil {
-								mu.Lock()
-								if firstErr == nil {
-									firstErr = fmt.Errorf("failed to convert %v to float: %w", strValue, err)
-								}
-								mu.Unlock()
+								errChan <- fmt.Errorf("failed to convert %v to float: %w", strValue, err)
 								return
 							}
 						}
 					}
-
 				case "DATETIME":
 					style = styles.DatetimeStyle
 					if strValue, ok := value.(string); ok {
@@ -320,16 +231,11 @@ func setDataParallel(f *excelize.File, sheetName string, jsonData []map[string]i
 						} else {
 							value, err = time.Parse("2006-01-02 15:04", strValue)
 							if err != nil {
-								mu.Lock()
-								if firstErr == nil {
-									firstErr = fmt.Errorf("failed to convert %v to datetime: %w", strValue, err)
-								}
-								mu.Unlock()
+								errChan <- fmt.Errorf("failed to convert %v to datetime: %w", strValue, err)
 								return
 							}
 						}
 					}
-
 				case "PERCENTAGE":
 					style = styles.PercentageStyle
 				default:
@@ -354,58 +260,55 @@ func setDataParallel(f *excelize.File, sheetName string, jsonData []map[string]i
 			end = len(jsonData)
 		}
 
+		batch := jsonData[i:end]
 		wg.Add(1)
-		go processBatch(jsonData[i:end], i)
+		go processBatch(batch, i)
 	}
 
 	go func() {
 		wg.Wait()
 		close(cellDataChan)
+		close(errChan)
 	}()
 
-	var allCellData []types.CellData
-	for cellData := range cellDataChan {
-		allCellData = append(allCellData, cellData...)
-	}
-
-	if firstErr != nil {
-		return firstErr
-	}
-
-	for _, cell := range allCellData {
-		cellRef := colIndexToName(cell.ColIndex) + strconv.Itoa(cell.RowIndex+2)
-		if err := f.SetCellValue(sheetName, cellRef, cell.Value); err != nil {
+	for err := range errChan {
+		if err != nil {
 			return err
 		}
-		if err := f.SetCellStyle(sheetName, cellRef, cellRef, cell.Style); err != nil {
-			return err
+	}
+	for cellData := range cellDataChan {
+		for _, cell := range cellData {
+			cellRef := colIndexToName(cell.ColIndex) + strconv.Itoa(cell.RowIndex+2)
+			if err := f.SetCellValue(sheetName, cellRef, cell.Value); err != nil {
+				return err
+			}
+			if err := f.SetCellStyle(sheetName, cellRef, cellRef, cell.Style); err != nil {
+				return err
+			}
 		}
 	}
 
 	return nil
 }
 
-func setColumnVisibility(f *excelize.File, sheetName string, meta []types.ColumnMeta, styles *types.ExcelStyles) error {
+func setColumnVisibility(f *excelize.File, sheetName string, meta []types.ColumnMeta, style *types.ExcelStyles) error {
 	type task struct {
 		colName string
 	}
 
+	rows, err := f.GetRows(sheetName)
+	if err != nil {
+		return err
+	}
+
 	numWorkers := runtime.NumCPU()
 	taskChan := make(chan task, len(meta))
-
 	worker := func() {
 		for t := range taskChan {
 			colName := t.colName
-			if err := f.SetColVisible(sheetName, colName, false); err != nil {
-				continue
-			}
-			rows, err := f.GetRows(sheetName)
-			if err != nil {
-				continue
-			}
 			for rowIndex := range rows {
 				cell := fmt.Sprintf("%s%d", colName, rowIndex+1)
-				if err := f.SetCellStyle(sheetName, cell, cell, styles.HiddenStyle); err != nil {
+				if err := f.SetCellStyle(sheetName, cell, cell, style.HiddenStyle); err != nil {
 					continue
 				}
 			}
@@ -424,6 +327,9 @@ func setColumnVisibility(f *excelize.File, sheetName string, meta []types.Column
 	for colIndex, col := range meta {
 		if col.DefaultVisibility == "hidden" || col.DefaultVisibility == "always_hidden" {
 			colName := colIndexToName(colIndex)
+			if err := f.SetColVisible(sheetName, colName, false); err != nil {
+				continue
+			}
 			taskChan <- task{colName: colName}
 		}
 	}
@@ -434,30 +340,40 @@ func setColumnVisibility(f *excelize.File, sheetName string, meta []types.Column
 	return nil
 }
 
+func colIndexToName(index int) string {
+	var columnName string
+	for index >= 0 {
+		columnName = string(rune('A'+index%26)) + columnName
+		index = index/26 - 1
+	}
+	return columnName
+}
+
 func adjustColumnWidths(f *excelize.File, sheetName string, jsonData []map[string]interface{}, meta []types.ColumnMeta) error {
 	numCores := runtime.NumCPU()
-	batchSize := (len(jsonData) + numCores - 1) / numCores
+	batchSize := len(jsonData) / numCores
 
-	colWidths := make([]map[string]float64, numCores)
-	for i := range colWidths {
-		colWidths[i] = make(map[string]float64)
-	}
-
+	colWidths := make(map[string]float64)
+	var mu sync.Mutex
 	var wg sync.WaitGroup
-	work := make(chan int, numCores)
 
-	worker := func(workerID int) {
-		defer wg.Done()
-		for batchStart := range work {
-			localColWidths := colWidths[workerID]
-			batchEnd := batchStart + batchSize
-			if batchEnd > len(jsonData) {
-				batchEnd = len(jsonData)
-			}
+	for i := 0; i < len(jsonData); i += batchSize {
+		end := i + batchSize
+		if end > len(jsonData) {
+			end = len(jsonData)
+		}
+		batch := jsonData[i:end]
 
-			for _, row := range jsonData[batchStart:batchEnd] {
+		wg.Add(1)
+		go func(batch []map[string]interface{}) {
+			defer wg.Done()
+			localColWidths := make(map[string]float64)
+
+			for _, row := range batch {
 				for _, col := range meta {
 					cellValue := fmt.Sprintf("%v", row[col.Name])
+					colName := col.Name
+
 					width := float64(len(cellValue)) * 1.15
 					if width < 10 {
 						width = 10
@@ -465,35 +381,25 @@ func adjustColumnWidths(f *excelize.File, sheetName string, jsonData []map[strin
 					if width > 255 {
 						width = 255
 					}
-					if width > localColWidths[col.Name] {
-						localColWidths[col.Name] = width
+					if width > localColWidths[colName] {
+						localColWidths[colName] = width
 					}
 				}
 			}
-		}
+
+			mu.Lock()
+			for colName, width := range localColWidths {
+				if width > colWidths[colName] {
+					colWidths[colName] = width
+				}
+			}
+			mu.Unlock()
+		}(batch)
 	}
 
-	for i := 0; i < numCores; i++ {
-		wg.Add(1)
-		go worker(i)
-	}
-
-	for i := 0; i < len(jsonData); i += batchSize {
-		work <- i
-	}
-	close(work)
 	wg.Wait()
 
-	finalColWidths := make(map[string]float64)
-	for _, widths := range colWidths {
-		for colName, width := range widths {
-			if finalColWidths[colName] < width {
-				finalColWidths[colName] = width
-			}
-		}
-	}
-
-	for colName, width := range finalColWidths {
+	for colName, width := range colWidths {
 		colIndex := getColumnIndex(meta, colName)
 		if colIndex != -1 {
 			colStr := colIndexToName(colIndex)
@@ -502,11 +408,21 @@ func adjustColumnWidths(f *excelize.File, sheetName string, jsonData []map[strin
 			}
 		}
 	}
-
 	return nil
 }
 
-
+func setHeaders(f *excelize.File, sheetName string, headers []string, style *types.ExcelStyles) error {
+	for i, header := range headers {
+		cell := colIndexToName(i) + "1"
+		if err := f.SetCellStr(sheetName, cell, header); err != nil {
+			return err
+		}
+	}
+	if err := f.SetCellStyle(sheetName, "A1", colIndexToName(len(headers)-1)+"1", style.HeaderStyle); err != nil {
+		return err
+	}
+	return nil
+}
 
 func getColumnIndex(meta []types.ColumnMeta, columnName string) int {
 	for i, col := range meta {
@@ -515,13 +431,4 @@ func getColumnIndex(meta []types.ColumnMeta, columnName string) int {
 		}
 	}
 	return -1
-}
-
-func colIndexToName(index int) string {
-	var columnName string
-	for index >= 0 {
-		columnName = string(rune('A'+index%26)) + columnName
-		index = index/26 - 1
-	}
-	return columnName
 }

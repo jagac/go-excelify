@@ -1,0 +1,42 @@
+{
+  "name": "Go DevContainer",
+  "dockerFile": "Dockerfile",
+  "mounts": ["source=${localWorkspaceFolder},target=/workspace,type=bind",
+"source=${localEnv:HOME}/.ssh,target=/home/node/.ssh,type=bind,consistency=cached"],
+  "workspaceFolder": "/workspace",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "golang.go",
+        "ms-azuretools.vscode-docker",
+        "esbenp.prettier-vscode"
+      ],
+      "settings": {
+        "terminal.integrated.shell.linux": "bash",
+        "terminal.integrated.profiles.linux": {
+          "bash (container default)": {
+            "path": "/usr/bin/bash",
+            "overrideName": true
+          }},
+
+        "editor.formatOnSave": true,
+        "go.formatTool": "goimports",
+        "[go]": {
+          "editor.formatOnSave": true,
+          "editor.codeActionsOnSave": {
+            "source.organizeImports": true,
+            "editor.formatOnSaveMode": "file"
+          }
+        },
+        "[go.mod]": {
+          "editor.formatOnSave": true,
+          "editor.codeActionsOnSave": {
+            "source.organizeImports": true
+          }
+        },
+        "dev.containers.copyGitConfig": true
+      }
+    }
+  },
+  "forwardPorts": [3000]
+}

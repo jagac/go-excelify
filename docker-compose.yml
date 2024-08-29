@@ -1,8 +1,10 @@
 services:
-  exporter:
-    image: reponame
+  excelify:
+    build:
+      context: .
+      dockerfile: .dockerbuild/Dockerfile
     ports:
-     - "${PORT}:${PORT}"
+      - "${PORT}:${PORT}"
     volumes:
       - ./logs:/root/logs
     env_file:
