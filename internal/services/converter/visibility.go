@@ -5,7 +5,7 @@ import (
 	"runtime"
 	"sync"
 
-	"github.com/Jagac/excelify/types"
+	"github.com/jagac/excelify/types"
 	"github.com/xuri/excelize/v2"
 )
 

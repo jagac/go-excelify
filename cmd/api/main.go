@@ -2,10 +2,11 @@ package main
 
 import (
 	"fmt"
-	"github.com/Jagac/excelify/internal/server"
 	"log"
 	"os"
 	"strconv"
+
+	"github.com/jagac/excelify/internal/server"
 
 	"github.com/joho/godotenv"
 )

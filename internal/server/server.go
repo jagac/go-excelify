@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Jagac/excelify/internal/services/converter"
-	"github.com/Jagac/excelify/internal/services/logging"
+	"github.com/jagac/excelify/internal/services/converter"
+	"github.com/jagac/excelify/internal/services/logging"
 )
 
 type Server struct {

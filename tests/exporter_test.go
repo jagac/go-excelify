@@ -11,10 +11,10 @@ import (
 	"os"
 	"testing"
 
-	"github.com/Jagac/excelify/internal/server"
-	"github.com/Jagac/excelify/internal/services/converter"
-	"github.com/Jagac/excelify/internal/services/logging"
-	"github.com/Jagac/excelify/types"
+	"github.com/jagac/excelify/internal/server"
+	"github.com/jagac/excelify/internal/services/converter"
+	"github.com/jagac/excelify/internal/services/logging"
+	"github.com/jagac/excelify/types"
 	"github.com/joho/godotenv"
 	"github.com/xuri/excelize/v2"
 )

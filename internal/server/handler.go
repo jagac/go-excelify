@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/Jagac/excelify/internal/middleware"
-	"github.com/Jagac/excelify/types"
+	"github.com/jagac/excelify/internal/middleware"
+	"github.com/jagac/excelify/types"
 	"github.com/xuri/excelize/v2"
 )
 

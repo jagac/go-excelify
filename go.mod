@@ -1,4 +1,4 @@
-module github.com/Jagac/excelify
+module github.com/jagac/excelify
 
 go 1.22.4
 
