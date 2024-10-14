@@ -24,13 +24,11 @@ Useful if your app needs a quick way to export some data and give it to a user a
 ```yaml
 services:
   excelify:
-    build:
-      context: .
-      dockerfile: .dockerbuild/Dockerfile
+    image: ghcr.io/jagac/go-excelify/go-excelify:latest
     ports:
       - "${PORT}:${PORT}"
     volumes:
-      - ./logs:/root/logs
+      - ./logs:${LOG_DIR}
     env_file:
       - .env
     restart: always
