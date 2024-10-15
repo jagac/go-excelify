@@ -12,9 +12,9 @@ import (
 	"testing"
 
 	"github.com/jagac/excelify/internal/server"
-	"github.com/jagac/excelify/internal/services/converter"
-	"github.com/jagac/excelify/internal/services/logging"
-	"github.com/jagac/excelify/types"
+	"github.com/jagac/excelify/internal/converter"
+	"github.com/jagac/excelify/internal/logging"
+	"github.com/jagac/excelify/internal/types"
 	"github.com/joho/godotenv"
 	"github.com/xuri/excelize/v2"
 )
@@ -24,15 +24,16 @@ func TestJsonHandler(t *testing.T) {
 	if err != nil {
 		log.Fatalf("Error loading .env file: %v", err)
 	}
-	router := http.NewServeMux()
+	mux := http.NewServeMux()
 	logger, err := logging.NewLogger()
 	if err != nil {
 		log.Fatalf("could not initialize logger: %v", err)
 	}
-
 	converter := converter.NewConverter()
-	handler := server.NewHandler(converter, logger)
-	handler.RegisterRoutes(router)
+
+	handler := server.NewHandler(converter)
+	router := server.NewRouter(handler, logger)
+	router.RegisterRoutes(mux)
 
 	t.Run("should convert using sequential", func(t *testing.T) {
 

@@ -3,10 +3,9 @@ package server
 import (
 	"log"
 	"net/http"
-	"time"
 
-	"github.com/jagac/excelify/internal/services/converter"
-	"github.com/jagac/excelify/internal/services/logging"
+	"github.com/jagac/excelify/internal/converter"
+	"github.com/jagac/excelify/internal/logging"
 )
 
 type Server struct {
@@ -20,21 +19,20 @@ func NewServer(addr string) *Server {
 }
 
 func (s *Server) Run() error {
-	router := http.NewServeMux()
+	mux := http.NewServeMux()
 	logger, err := logging.NewLogger()
 	if err != nil {
 		log.Fatalf("could not initialize logger: %v", err)
 	}
 	converter := converter.NewConverter()
-	handler := NewHandler(converter, logger)
-	handler.RegisterRoutes(router)
+
+	handler := NewHandler(converter)
+	router := NewRouter(handler, logger)
+	router.RegisterRoutes(mux)
 
 	server := &http.Server{
-		Addr:         s.addr,
-		Handler:      router,
-		ReadTimeout:  20 * time.Second,
-		WriteTimeout: 20 * time.Second,
-		IdleTimeout:  20 * time.Second,
+		Addr:    s.addr,
+		Handler: mux,
 	}
 	return server.ListenAndServe()
 }

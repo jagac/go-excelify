@@ -1,6 +1,6 @@
 package converter
 
-import "github.com/jagac/excelify/types"
+import "github.com/jagac/excelify/internal/types"
 
 func colIndexToName(index int) string {
 	var columnName string

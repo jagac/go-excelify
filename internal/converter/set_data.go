@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jagac/excelify/types"
+	"github.com/jagac/excelify/internal/types"
 	"github.com/xuri/excelize/v2"
 )
 

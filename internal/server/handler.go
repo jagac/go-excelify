@@ -2,35 +2,21 @@ package server
 
 import (
 	"encoding/json"
-	"log/slog"
 	"net/http"
 
-	"github.com/jagac/excelify/internal/middleware"
-	"github.com/jagac/excelify/types"
+	"github.com/jagac/excelify/internal/types"
 	"github.com/xuri/excelize/v2"
 )
 
 type Handler struct {
-	converter     types.Converter
-	logger        *slog.Logger
-	logMiddleware func(http.Handler) http.Handler
+	converter types.Converter
 }
 
-func NewHandler(converter types.Converter, logger *slog.Logger) *Handler {
-	loggingConfig := middleware.LoggingConfig{Logger: logger}
-
-	logMiddleware := loggingConfig.Middleware
+func NewHandler(converter types.Converter) *Handler {
 
 	return &Handler{
-		converter:     converter,
-		logger:        logger,
-		logMiddleware: logMiddleware,
+		converter: converter,
 	}
-}
-
-func (h *Handler) RegisterRoutes(router *http.ServeMux) {
-	router.Handle("POST /api/v1/conversions/to-excel", h.logMiddleware(http.HandlerFunc(h.HandleJsonToExcel)))
-	router.Handle("POST /api/v1/conversions/to-json", h.logMiddleware(http.HandlerFunc(h.HandleExcelToJson)))
 }
 
 func (h *Handler) HandleJsonToExcel(w http.ResponseWriter, r *http.Request) {
@@ -55,10 +41,10 @@ func (h *Handler) HandleJsonToExcel(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Disposition", "attachment; filename="+jsonData.Filename)
 	w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet; charset=utf-8")
+
 	w.WriteHeader(http.StatusOK)
 
 	if _, err := w.Write(excelBuffer.Bytes()); err != nil {
-
 		http.Error(w, "Failed to write Excel response", http.StatusInternalServerError)
 		return
 	}
