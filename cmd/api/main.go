@@ -1,11 +1,12 @@
 package main
 
 import (
-	"fmt"
 	"log"
+	"net/http"
 	"os"
-	"strconv"
 
+	"github.com/jagac/excelify/internal/converter"
+	"github.com/jagac/excelify/internal/logging"
 	"github.com/jagac/excelify/internal/server"
 	"github.com/joho/godotenv"
 )
@@ -17,19 +18,23 @@ func main() {
 	}
 
 	portStr := os.Getenv("PORT")
+	address := ":" + portStr
 	if portStr == "" {
 		log.Fatal("PORT environment variable is not set")
 	}
 
-	port, err := strconv.Atoi(portStr)
+	mux := http.NewServeMux()
+	logger, err := logging.NewLogger()
 	if err != nil {
-		log.Fatalf("Invalid PORT value: %s", portStr)
+		log.Fatalf("could not initialize logger: %v", err)
 	}
+	converter := converter.NewConverter()
 
-	serverAddress := fmt.Sprintf(":%d", port)
-	srv := server.NewServer(serverAddress)
+	handler := server.NewHandler(converter)
+	router := server.NewRouter(handler, logger)
+	router.RegisterRoutes(mux)
 
-	if err := srv.Run(); err != nil {
-		log.Fatal(err)
+	if err := http.ListenAndServe(address, mux); err != nil {
+		log.Fatalf("server failed: %v", err)
 	}
 }

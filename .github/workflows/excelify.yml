@@ -17,24 +17,15 @@ jobs:
       uses: securego/gosec@master
       with:
         args: ./...
-
+        
   lint:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    - name: Set up Go
-      uses: actions/setup-go@v5
+    - uses: actions/checkout@v4          
+    - name: Golangci-lint
+      uses: golangci/golangci-lint-action@v6.1.1
       with:
-        go-version: '1.22.4'
-
-    - name: Install golangci-lint
-      run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-    - name: Install govulncheck
-      run: go install golang.org/x/vuln/cmd/govulncheck@latest
-    - name: Run golangci-lint
-      run: golangci-lint run ./...
-    - name: Check vulnerabilities
-      run: govulncheck ./...
+        args: ./...     
 
   test:
     runs-on: ubuntu-latest
@@ -43,14 +34,17 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: '1.22.4'
-
+        go-version: '1.23.2'
     - name: Run formatting check
       run: go fmt $(go list ./... | grep -v /vendor/)
     - name: Run vet check
       run: go vet $(go list ./... | grep -v /vendor/)
     - name: Run tests
       run: go test ./...
+    - name: Install govulncheck
+      run: go install golang.org/x/vuln/cmd/govulncheck@latest
+    - name: Check vulnerabilities
+      run: govulncheck ./...
 
   build:
     runs-on: ubuntu-latest
@@ -60,13 +54,11 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: '1.22.4'
+        go-version: '1.23.2'
 
     - name: Log in to GitHub Container Registry
       run: echo "${{ secrets.GH_PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-
     - name: Build the Docker image
       run: docker build -t ghcr.io/${{ github.repository }}/go-excelify:latest -f .dockerbuild/Dockerfile .
-
     - name: Push the Docker image to GitHub Container Registry
       run: docker push ghcr.io/${{ github.repository }}/go-excelify:latest
