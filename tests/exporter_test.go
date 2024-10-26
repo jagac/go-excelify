@@ -11,13 +11,19 @@ import (
 	"os"
 	"testing"
 
-	"github.com/jagac/excelify/internal/server"
 	"github.com/jagac/excelify/internal/converter"
 	"github.com/jagac/excelify/internal/logging"
+	"github.com/jagac/excelify/internal/server"
 	"github.com/jagac/excelify/internal/types"
 	"github.com/joho/godotenv"
 	"github.com/xuri/excelize/v2"
+	"go.uber.org/goleak"
 )
+
+func TestMain(m *testing.M) {
+
+	goleak.VerifyTestMain(m)
+}
 
 func TestJsonHandler(t *testing.T) {
 	err := godotenv.Load()
@@ -36,7 +42,7 @@ func TestJsonHandler(t *testing.T) {
 	router.RegisterRoutes(mux)
 
 	t.Run("should convert using sequential", func(t *testing.T) {
-
+		defer goleak.VerifyNone(t)
 		payload := types.RequestJson{
 			Filename: "example.xlsx",
 			Data:     generateDataItems(1000),
@@ -112,7 +118,7 @@ func TestJsonHandler(t *testing.T) {
 	})
 
 	t.Run("should convert using parallel", func(t *testing.T) {
-
+		defer goleak.VerifyNone(t)
 		payload := types.RequestJson{
 			Filename: "example.xlsx",
 			Data:     generateDataItems(50000),

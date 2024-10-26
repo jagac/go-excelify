@@ -11,7 +11,7 @@ run:
 test:
 	@echo "Testing..."
 	@go clean -testcache
-	@go test ./...
+	@go test ./... -v
 
 
 lint:
