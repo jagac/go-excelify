@@ -62,8 +62,9 @@ func setDataParallel(f *excelize.File, sheetName string, jsonData []map[string]i
 	batchSize := (len(jsonData) + numCores - 1) / numCores
 
 	cellDataChan := make(chan []types.CellData, numCores)
-	errChan := make(chan error, numCores)
 	var wg sync.WaitGroup
+	var firstError error
+	var mu sync.Mutex
 
 	processBatch := func(batch []map[string]interface{}, startIndex int) {
 		defer wg.Done()
@@ -73,7 +74,11 @@ func setDataParallel(f *excelize.File, sheetName string, jsonData []map[string]i
 			for colIndex, col := range meta {
 				value, style, err := convertValue(row[col.Name], col.Type, styles)
 				if err != nil {
-					errChan <- err
+					mu.Lock()
+					if firstError == nil {
+						firstError = err
+					}
+					mu.Unlock()
 					return
 				}
 
@@ -89,6 +94,7 @@ func setDataParallel(f *excelize.File, sheetName string, jsonData []map[string]i
 		cellDataChan <- cellData
 	}
 
+	// Start goroutines to process each batch
 	for i := 0; i < len(jsonData); i += batchSize {
 		end := i + batchSize
 		if end > len(jsonData) {
@@ -99,19 +105,17 @@ func setDataParallel(f *excelize.File, sheetName string, jsonData []map[string]i
 		go processBatch(jsonData[i:end], i)
 	}
 
+	// Close the cell data channel once all batches are processed
 	go func() {
 		wg.Wait()
 		close(cellDataChan)
-		close(errChan)
 	}()
 
-	for err := range errChan {
-		if err != nil {
-			return err
-		}
-	}
-
+	// Set all cell values and styles in batches
 	for cellData := range cellDataChan {
+		if firstError != nil {
+			return firstError
+		}
 		for _, cell := range cellData {
 			cellRef := colIndexToName(cell.ColIndex) + strconv.Itoa(cell.RowIndex+2)
 			if err := f.SetCellValue(sheetName, cellRef, cell.Value); err != nil {
@@ -123,7 +127,7 @@ func setDataParallel(f *excelize.File, sheetName string, jsonData []map[string]i
 		}
 	}
 
-	return nil
+	return firstError
 }
 
 func convertValue(value interface{}, colType string, styles *ExcelStyles) (interface{}, int, error) {

@@ -13,10 +13,16 @@ func adjustColumnWidths(f *excelize.File, sheetName string, jsonData []map[strin
 	numCores := runtime.NumCPU()
 	batchSize := (len(jsonData) + numCores - 1) / numCores
 
-	colWidths := make(map[string]float64, len(meta))
-	var mu sync.RWMutex
-	var wg sync.WaitGroup
+	// Initial width setting per column with 10 as the minimum width
+	globalColWidths := make(map[string]float64, len(meta))
+	for _, col := range meta {
+		globalColWidths[col.Name] = 10.0
+	}
 
+	var wg sync.WaitGroup
+	localWidthsChan := make(chan map[string]float64, numCores)
+
+	// Process each batch in a goroutine
 	for i := 0; i < len(jsonData); i += batchSize {
 		end := i + batchSize
 		if end > len(jsonData) {
@@ -31,33 +37,45 @@ func adjustColumnWidths(f *excelize.File, sheetName string, jsonData []map[strin
 
 			for _, row := range batch {
 				for _, col := range meta {
-					cellValue := fmt.Sprintf("%v", row[col.Name])
-					width := float64(len(cellValue)) * 1.15
+					cellValue, exists := row[col.Name]
+					if !exists {
+						continue
+					}
+
+					width := float64(len(fmt.Sprintf("%v", cellValue))) * 1.15
 					if width < 10 {
 						width = 10
-					}
-					if width > 255 {
+					} else if width > 255 {
 						width = 255
 					}
+
 					if width > localColWidths[col.Name] {
 						localColWidths[col.Name] = width
 					}
 				}
 			}
 
-			mu.Lock()
-			for colName, width := range localColWidths {
-				if width > colWidths[colName] {
-					colWidths[colName] = width
-				}
-			}
-			mu.Unlock()
+			localWidthsChan <- localColWidths
 		}(batch)
 	}
 
-	wg.Wait()
+	// Close channel after all goroutines complete
+	go func() {
+		wg.Wait()
+		close(localWidthsChan)
+	}()
 
-	for colName, width := range colWidths {
+	// Merge local column widths into globalColWidths
+	for localWidths := range localWidthsChan {
+		for colName, width := range localWidths {
+			if width > globalColWidths[colName] {
+				globalColWidths[colName] = width
+			}
+		}
+	}
+
+	// Apply column widths to the Excel sheet
+	for colName, width := range globalColWidths {
 		colIndex := getColumnIndex(meta, colName)
 		if colIndex != -1 {
 			colStr := colIndexToName(colIndex)
