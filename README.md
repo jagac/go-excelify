@@ -13,8 +13,7 @@ Useful if your app needs a quick way to export some data and give it to a user a
   - [API Endpoints](#api-endpoints)
     - [Convert JSON to Excel](#convert-json-to-excel)
     - [Convert Excel to JSON](#convert-excel-to-json)
-
-
+  - [Benchmarks](#benchmarks)
 ---
 
 # Docs
@@ -37,7 +36,6 @@ Note: you need so specify LOG_DIR and PORT in a .env for the build.
 I suggest:
 `LOG_DIR=/root/logs
 PORT=3000`
-
 
 
 ---
@@ -178,3 +176,28 @@ PORT=3000`
     ```
 
 ---
+
+
+## Benchmarks (1.23 vs 1.24)
+
+```bash
+$ cd tests
+$ go test -bench=. 
+ 
+goos: linux
+goarch: amd64
+pkg: github.com/jagac/excelify/tests
+cpu: AMD Ryzen 9 5900HX with Radeon Graphics
+BenchmarkConversion-16
+```
+ 
+| Go Version | Cores | Rows | Benchmark Result |
+|------------|-------|------|------------------|
+| 1.23.2       | 16     | 100  | 8038458 ns/op        |
+| 1.23.2       | 16     | 1000 | 62922722 ns/op         |
+| 1.23.2       | 16     | 10000  | 602835904 ns/op         |
+| 1.23.2       | 16     | 100000 | 5914336275 ns/op         |
+| 1.24       | 16     | 100  | TODO         |
+| 1.24       | 16     | 1000 | TODO         |
+| 1.24       | 16     | 10000  | TODO         |
+| 1.24       | 16     | 100000 | TODO         |
